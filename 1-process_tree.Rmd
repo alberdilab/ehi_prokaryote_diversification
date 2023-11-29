@@ -1,0 +1,162 @@
+---
+title: "1-process_tree.Rmd"
+author: "Antton Alberdi"
+date: "11/27/2023"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r libaries, echo=FALSE, warnings=FALSE}
+library(tidyverse)
+library(R.utils)
+library(ape)
+library(castor)
+library(distances)
+library(fastcluster)
+```
+
+## Load data
+Load GTDB tree, associated taxonomy, taxonomy of the >7000 reference genomes (1 genome per genus) and metadata from the EHI database.
+
+```{r load_data}
+#GTDB tree
+tree <- read.tree(gunzip("data/gtdbtk/gtdbtk.bac120.classify.tree.gz", remove=FALSE, overwrite=TRUE))
+
+#Taxonomy of reference genomes
+reference_taxonomy <- read.table("data/reference_taxonomy.tsv", sep="\t", header=T) %>%
+  rownames_to_column(var = "Genome") %>%
+  mutate(Genome = gsub("GCA", "GB_GCA", Genome)) %>%
+  mutate(Genome = gsub("GCF", "RS_GCF", Genome))
+
+#EHI taxonomy
+ehi_taxonomy <- read.table(gunzip("data/gtdbtk/gtdbtk.bac120.summary.tsv.gz", remove=FALSE, overwrite=TRUE), sep="\t", header=T) %>%
+  rename(Genome = user_genome)  %>%
+  separate(classification, c("Domain", "Phylum","Class","Order","Family","Genus","Species"),  sep =";") %>%
+  select(Genome,Domain,Phylum,Class,Order,Family,Genus,Species)
+
+#EHI MAG metadta
+ehi_metadata <- read.table("data/ehi_metadata.csv", sep=",", header=T) %>%
+  rename(Genome = mag_name) %>%
+  mutate(Genome = gsub(".fa", "", Genome))
+```
+
+## Prune phylogenetic tree
+List genome names to prune the massive GTDB phylogenetic tree.
+```{r focal_tips, echo=FALSE}
+tips_reference <- reference_taxonomy$Genome
+
+tips_ehi <- tree$tip.label %>%
+  grep("EHA", ., value = TRUE)
+
+tips <- c(tips_reference,tips_ehi)
+
+tips <- tips[tips %in% tree$tip.label]
+```
+
+Prune the tree to only retain EHI MAGs and reference genomes.
+```{r prune_tree, echo=FALSE}
+tree_pruned <- keep.tip(tree, tip=tips) 
+write.tree(tree_pruned,"data/tree_pruned.tree")
+```
+
+## Create tip taxonomy table
+Create an overview taxonomy table of EHI MAGs and reference genomes.
+```{r tip_taxonomy, echo=FALSE}
+taxonomy <- rbind(ehi_taxonomy,reference_taxonomy) %>%
+  filter(Genome %in% tree_pruned$tip.label)
+write.table(taxonomy,"data/tree_pruned.tsv",sep="\t",row.names=F,col.names=T,quote=F)
+```
+
+## Cluster genomes
+Cluster phylogenetically related genomes based on their maximum phylogenetic distances, and generate trees and relevant metadata for each cluster. 
+
+```{r cluster_genomes, echo=FALSE}
+
+#Generate pairwise phylogenetic distances
+tipdist <- cophenetic.phylo(tree_pruned) 
+#tipdist_matrix <- as.matrix(tipdist)
+tipdist <- distances(tipdist, id_variable=rownames(tipdist)) %>%
+    distance_matrix()
+
+#Hierarchically cluster genomes according to phylogenetic distances
+tipclust <- fastcluster::hclust(tipdist, method = "complete")
+save(tipclust,file="data/tree_clust.Rdata")
+
+#Cluster genomes
+
+height=2.5 #threshold
+
+#Cluster
+tipsplit <- cutree(tipclust, h=height)
+
+#Count number of clusters
+nclusters <- max(tipsplit)
+
+#Generate cluster table
+cluster_table <- tibble()
+for (c in c(1:nclusters)){
+  tipvector <- names(tipsplit[tipsplit==c])
+  #Length
+  tips_length <- length(tipvector)
+  #Common taxonomy
+  tips_taxonomy <- taxonomy %>%
+  filter(Genome %in% tipvector) %>%
+  select(-Genome) %>%
+  summarise(across(everything(), ~ all(. == .[[1]]))) %>%
+  unlist() %>%
+  rev() %>%
+  .[which.max(. == TRUE)] %>%
+  names()
+  #Number of references and EHI
+  ref <- length(tipvector[tipvector %in% tips_reference])
+  ehi <- length(tipvector[tipvector %in% tips_ehi])
+  #Host taxa
+  tips_host <- ehi_metadata %>%
+    filter(Genome %in% tipvector) %>%
+    select(host_species) %>%
+    unique() %>%
+    pull()
+  tips_hostn <- length(tips_host)
+  #Subtree and statistics
+  subtree <- keep.tip(tree_pruned,tip=tipvector)
+  if(length(subtree$tip.label) > 1){
+      treedist <- subtree %>% cophenetic.phylo() 
+      #Max distance
+      maxdist <- treedist %>% max()
+      meandist <- treedist %>% mean()
+  }else{
+    maxdist <- NA
+    meandist <- NA
+  }
+  #Generate row
+  row <- tibble(cluster=c,size=tips_length,ref=ref,ehi=ehi,taxonomy=tips_taxonomy,hostn=tips_hostn,hosts=list(tips_host),genomes=list(tipvector),tree=list(subtree),meandist=meandist,maxdist=maxdist)
+  #Add to table
+  cluster_table <- bind_rows(cluster_table,row)
+}
+
+cluster_table %>%
+  arrange(desc(size)) %>%
+  print(n = 30)
+```
+
+### Screen cluster
+Screen data of a specific cluster
+
+```{r screen_cluster, echo=FALSE}
+clustern=703
+
+clustergenomes <- cluster_table %>%
+  filter(cluster==clustern) %>%
+  select(genomes) %>%
+  unlist() 
+
+taxonomy %>%
+  filter(Genome %in% clustergenomes) %>%
+  left_join(ehi_metadata, by=join_by(Genome==Genome)) %>%
+  select(Genome,Domain,Phylum,Class,Order,Family,Genus,Species,completeness,contamination,size,host_species,sample_type)
+
+plot(keep.tip(tree_pruned,tip=c(clustergenomes,"GB_GCA_001829155.1")))
+```
