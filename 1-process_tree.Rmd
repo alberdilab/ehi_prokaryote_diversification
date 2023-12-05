@@ -1,6 +1,6 @@
 ---
 title: "1-process_tree.Rmd"
-author: "Antton Alberdi"
+author: "Antton Alberdi/Raphael Eisenhofer"
 date: "11/27/2023"
 output: html_document
 ---
@@ -83,7 +83,6 @@ save(tipclust,file="data/tree_clust.Rdata")
 ```
 
 Split the phylogeny into clusters and generate subtrees and relevant metadata for each cluster. 
-
 ```{r split_clusters, echo=FALSE}
 #Cluster genomes
 height=0.35 #threshold
@@ -147,6 +146,36 @@ for (c in c(1:nclusters)){
 #Save clusters
 save(cluster_table,file="data/cluster_table.Rdata")
 ```
+
+
+Create a tidy dataframe of clusters with relevant metadata
+```{r tidy, echo=FALSE}
+library(janitor)
+load("data/cluster_table.Rdata")
+
+reference_taxonomy <- read.table("data/reference_taxonomy.tsv", sep="\t", header=T) %>%
+  rownames_to_column(var = "Genome") %>%
+  mutate(Genome = gsub("GCA", "GB_GCA", Genome)) %>%
+  mutate(Genome = gsub("GCF", "RS_GCF", Genome)) %>%
+  clean_names()
+
+ehi_metadata <- read.table("data/ehi_metadata.csv", sep=",", header=T) %>%
+  rename(Genome = mag_name) %>%
+  mutate(Genome = gsub(".fa", "", Genome)) %>%
+  clean_names()
+
+unnested <- cluster_table %>%
+  unnest(., genomes) %>%
+  select(cluster, size, ref, ehi, kinship, hostn, genomes) %>%
+  rename(cluster_size = size)
+
+ehi_clusters <- bind_rows(ehi_metadata, reference_taxonomy) %>%
+  inner_join(., unnested, by = join_by(genome == genomes))
+
+write_tsv(ehi_clusters, "data/ehi_clusters_tidy.tsv")
+
+```
+
 
 Generate overviews of the splitting
 ```{r split_clusters_overview, echo=FALSE}
