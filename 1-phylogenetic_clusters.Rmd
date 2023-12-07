@@ -36,7 +36,7 @@ ehi_taxonomy <- read.table(gunzip("data/gtdbtk/gtdbtk.bac120.summary.tsv.gz", re
   separate(classification, c("Domain", "Phylum","Class","Order","Family","Genus","Species"),  sep =";") %>%
   select(Genome,Domain,Phylum,Class,Order,Family,Genus,Species)
 
-#EHI MAG metadta
+#EHI MAG metadata
 ehi_metadata <- read.table("data/ehi_metadata.csv", sep=",", header=T) %>%
   rename(Genome = mag_name) %>%
   mutate(Genome = gsub(".fa", "", Genome))
@@ -57,7 +57,7 @@ tips <- tips[tips %in% tree$tip.label]
 
 Prune the tree to only retain EHI MAGs and reference genomes.
 ```{r prune_tree, echo=FALSE}
-tree_pruned <- keep.tip(tree, tip=tips) 
+tree_pruned <- keep.tip(tree, tip=tips)
 write.tree(tree_pruned,"data/tree_pruned.tree")
 ```
 
@@ -75,18 +75,18 @@ Cluster phylogenetically related genomes based on their maximum phylogenetic dis
 ```{r cluster_genomes, echo=FALSE}
 
 #Generate pairwise phylogenetic distances
-tipdist <- cophenetic.phylo(tree_pruned) 
+tipdist <- cophenetic.phylo(tree_pruned)
 
 #Hierarchically cluster genomes according to phylogenetic distances
 tipclust <- fastcluster::hclust(as.dist(tipdist), method = "complete")
 save(tipclust,file="data/tree_clust.Rdata")
 ```
 
-Split the phylogeny into clusters and generate subtrees and relevant metadata for each cluster. 
+Split the phylogeny into clusters and generate subtrees and relevant metadata for each cluster.
 
 ```{r split_clusters, echo=FALSE}
 #Cluster genomes
-height=0.35 #threshold
+height=0.45 #threshold
 
 #Cluster
 tipsplit <- cutree(tipclust, h=height)
@@ -130,7 +130,7 @@ for (c in c(1:nclusters)){
   #Subtree and statistics
   subtree <- keep.tip(tree_pruned,tip=tipvector)
   #if(length(subtree$tip.label) > 1){
-  #    treedist <- subtree %>% cophenetic.phylo() 
+  #    treedist <- subtree %>% cophenetic.phylo()
       #Max distance
   #    maxdist <- treedist %>% max()
   #    meandist <- treedist %>% mean()
@@ -145,7 +145,7 @@ for (c in c(1:nclusters)){
 }
 
 #Save clusters
-save(cluster_table,file="data/cluster_table.Rdata")
+save(cluster_table,file="data/cluster_table_45.Rdata")
 ```
 
 Generate overviews of the splitting
@@ -174,7 +174,7 @@ clustern=1257
 clustergenomes <- cluster_table %>%
   filter(cluster==clustern) %>%
   select(genomes) %>%
-  unlist() 
+  unlist()
 
 taxonomy %>%
   filter(Genome %in% clustergenomes) %>%

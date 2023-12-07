@@ -1,0 +1,61 @@
+---
+title: "2-cluster_analysis.Rmd"
+author: "Antton Alberdi"
+date: "11/30/2023"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r libaries, echo=FALSE, warnings=FALSE, messages=FALSE}
+library(tidyverse)
+library(R.utils)
+library(ape)
+```
+
+## Load data
+Load GTDB tree, associated taxonomy, taxonomy of the >7000 reference genomes (1 genome per genus) and metadata from the EHI database.
+
+```{r load_data}
+#Clusters (object cluster_table)
+load("data/cluster_table_35.Rdata")
+
+#Taxonomy
+taxonomy <- read.table("data/tree_pruned.tsv", sep="\t", header=T)
+
+#EHI MAG metadata
+ehi_metadata <- read.table("data/ehi_metadata.csv", sep=",", header=T) %>%
+  rename(Genome = mag_name) %>%
+  mutate(Genome = gsub(".fa", "", Genome))
+```
+
+```{r cluster_sorting}
+#Top 100 of MAG number
+cluster_table %>%
+  arrange(desc(size)) %>%
+  print(n = 100)
+
+#Top 100 of host number
+cluster_table %>%
+  arrange(desc(hostn)) %>%
+  print(n = 100)
+
+#Number of clusters with >10 hosts and >10 MAGs
+cluster_table %>%
+  filter(size>10, hostn>10)
+```
+
+```{r cluster_analysis}
+clustern=1146
+
+#Select cluster from the cluster table
+cluster <- cluster_table %>%
+  filter(cluster == clustern)
+
+#Subset EHI metadata to the cluster MAGs
+ehi_metadata_cluster <- ehi_metadata %>%
+  filter(Genome %in% unlist(cluster$genomes))
+
+```
