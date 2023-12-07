@@ -89,20 +89,20 @@ heights=c("0.30","0.35","0.40","0.45")
 
 # Iterate across the different heights
 for (height in heights){
-  
+
     #Clustering code prefix
     cluster_prefix=paste0("h",substr(height,3,4))
     height <- as.numeric(height)
-    
+
     #Verbosity
     cat(paste0("Generating cluster table for height ",height,"\n"))
-      
+
     #Cluster
     tipsplit <- cutree(tipclust, h=height)
-    
+
     #Count number of clusters
     nclusters <- max(tipsplit)
-    
+
     #Generate cluster table
     cluster_table <- tibble()
     for (c in c(1:nclusters)){
@@ -152,7 +152,7 @@ for (height in heights){
       #Add to table
       cluster_table <- bind_rows(cluster_table,row)
     }
-    
+
     #Save clusters
     save(cluster_table,file=paste0("results/cluster_table_",cluster_prefix,".Rdata"))
 
@@ -183,7 +183,7 @@ clusters_h40 <- cluster_table %>%
     unnest(., genomes) %>%
     select(cluster, genomes) %>%
     rename(h40=cluster)
-  
+
 load("results/cluster_table_h45.Rdata")
 clusters_h45 <- cluster_table %>%
     unnest(., genomes) %>%
@@ -195,26 +195,55 @@ clusters_metadata <- bind_rows(ehi_metadata, reference_taxonomy) %>%
       left_join(clusters_h35, by = join_by(genome == genomes)) %>%
       left_join(clusters_h40, by = join_by(genome == genomes)) %>%
       left_join(clusters_h45, by = join_by(genome == genomes))
-      
+
 write_tsv(clusters_metadata, "results/clusters_metadata.tsv")
 ```
 
 
 Generate overviews of the splitting
 ```{r split_clusters_overview, echo=FALSE}
-#Top 100 of MAG number
-cluster_table %>%
-  arrange(desc(size)) %>%
-  print(n = 100)
+heights=c("0.30","0.35","0.40","0.45")
 
-#Top 100 of host number
-cluster_table %>%
-  arrange(desc(hostn)) %>%
-  print(n = 100)
+# Iterate across the different heights
 
-#Number of clusters with >10 hosts and >10 MAGs
-cluster_table %>%
-  filter(size>10, hostn>10)
+clusterstats <- c()
+for (height in heights){
+    #Clustering code prefix
+    cluster_prefix=paste0("h",substr(height,3,4))
+    height <- as.numeric(height)
+    load(paste0("results/cluster_table_",cluster_prefix,".Rdata"))
+
+    #Calculate statistics
+    nclusters <- cluster_table %>%
+      filter(hostn>0) %>%
+      nrow()
+    divclusters <- cluster_table %>%
+      filter(size>10, hostn>10) %>%
+      nrow()
+    meanmags <- cluster_table %>%
+      filter(hostn>0) %>%
+      select(size) %>% pull() %>%
+      mean() %>%
+      round(2)
+    maxmags <- cluster_table %>%
+        filter(hostn>0) %>%
+        select(size) %>% pull() %>%
+        max()
+    meanhosts <- cluster_table %>%
+      filter(hostn>0) %>%
+      select(hostn) %>% pull() %>%
+      mean() %>%
+      round(2)
+    maxhosts <- cluster_table %>%
+      filter(hostn>0) %>%
+      select(hostn) %>% pull() %>%
+      max()
+    row <- c(set=cluster_prefix,clusters=nclusters,diverse=divclusters,meanmags=meanmags,maxmags=maxmags,meanhosts=meanhosts,maxhosts=maxhosts)
+    clusterstats <- rbind(clusterstats,row)
+}
+
+clusterstats <- as.data.frame(clusterstats)
+
 ```
 
 ### Screen cluster
