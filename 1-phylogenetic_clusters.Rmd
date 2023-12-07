@@ -196,7 +196,7 @@ clusters_metadata <- bind_rows(ehi_metadata, reference_taxonomy) %>%
       left_join(clusters_h40, by = join_by(genome == genomes)) %>%
       left_join(clusters_h45, by = join_by(genome == genomes))
       
-write_tsv(ehi_clusters, "results/clusters_metadata.tsv")
+write_tsv(clusters_metadata, "results/clusters_metadata.tsv")
 ```
 
 
