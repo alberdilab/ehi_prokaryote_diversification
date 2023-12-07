@@ -1,6 +1,6 @@
 ---
 title: "1-process_tree.Rmd"
-author: "Antton Alberdi/Raphael Eisenhofer"
+authors: "Antton Alberdi, Raphael Eisenhofer"
 date: "11/27/2023"
 output: html_document
 ---
@@ -58,7 +58,7 @@ tips <- tips[tips %in% tree$tip.label]
 Prune the tree to only retain EHI MAGs and reference genomes.
 ```{r prune_tree, echo=FALSE}
 tree_pruned <- keep.tip(tree, tip=tips)
-write.tree(tree_pruned,"data/tree_pruned.tree")
+write.tree(tree_pruned,"results/tree_pruned.tree")
 ```
 
 ## Create tip taxonomy table
@@ -66,12 +66,11 @@ Create an overview taxonomy table of EHI MAGs and reference genomes.
 ```{r tip_taxonomy, echo=FALSE}
 taxonomy <- rbind(ehi_taxonomy,reference_taxonomy) %>%
   filter(Genome %in% tree_pruned$tip.label)
-write.table(taxonomy,"data/tree_pruned.tsv",sep="\t",row.names=F,col.names=T,quote=F)
+write.table(taxonomy,"results/tree_pruned.tsv",sep="\t",row.names=F,col.names=T,quote=F)
 ```
 
 ## Cluster genomes
 Cluster phylogenetically related genomes based on their maximum phylogenetic distances.
-
 ```{r cluster_genomes, echo=FALSE}
 
 #Generate pairwise phylogenetic distances
@@ -79,106 +78,125 @@ tipdist <- cophenetic.phylo(tree_pruned)
 
 #Hierarchically cluster genomes according to phylogenetic distances
 tipclust <- fastcluster::hclust(as.dist(tipdist), method = "complete")
-save(tipclust,file="data/tree_clust.Rdata")
+save(tipclust,file="results/tree_clust.Rdata")
 ```
 
-<<<<<<< HEAD:1-phylogenetic_clusters.Rmd
 Split the phylogeny into clusters and generate subtrees and relevant metadata for each cluster.
 
-=======
-Split the phylogeny into clusters and generate subtrees and relevant metadata for each cluster. 
->>>>>>> e740b613c93a7e7f7cbe5024c9154d1cec8a1528:1-process_tree.Rmd
 ```{r split_clusters, echo=FALSE}
-#Cluster genomes
-height=0.45 #threshold
+# Vector of phylogenetic distances used for clustering MAGs
+heights=c("0.30","0.35","0.40","0.45")
 
-#Cluster
-tipsplit <- cutree(tipclust, h=height)
+# Iterate across the different heights
+for (height in heights){
+  
+    #Clustering code prefix
+    cluster_prefix=paste0("h",substr(height,3,4))
+    height <- as.numeric(height)
+    
+    #Verbosity
+    cat(paste0("Generating cluster table for height ",height,"\n"))
+      
+    #Cluster
+    tipsplit <- cutree(tipclust, h=height)
+    
+    #Count number of clusters
+    nclusters <- max(tipsplit)
+    
+    #Generate cluster table
+    cluster_table <- tibble()
+    for (c in c(1:nclusters)){
+      #cat(paste0(c,"/",nclusters,"\n"))
+      tipvector <- names(tipsplit[tipsplit==c])
+      #Length
+      tips_length <- length(tipvector)
+      #Taxonomic kinship
+      tips_kinship <- taxonomy %>%
+      filter(Genome %in% tipvector) %>%
+      select(-Genome) %>%
+      summarise(across(everything(), ~ all(. == .[[1]]))) %>%
+      unlist() %>%
+      rev() %>%
+      .[which.max(. == TRUE)] %>%
+      names()
+      #Phylum
+      phylum <- taxonomy %>%
+         filter(Genome %in% tipvector) %>%
+        select(Phylum) %>%
+        slice(1) %>%
+        pull()
+      #Number of references and EHI
+      ref <- length(tipvector[tipvector %in% tips_reference])
+      ehi <- length(tipvector[tipvector %in% tips_ehi])
+      #Host taxa
+      tips_host <- ehi_metadata %>%
+        filter(Genome %in% tipvector) %>%
+        select(host_species) %>%
+        unique() %>%
+        pull()
+      #Host taxa
+      tips_hostn <- length(tips_host)
+      #Subtree and statistics
+      subtree <- keep.tip(tree_pruned,tip=tipvector)
+      #if(length(subtree$tip.label) > 1){
+      #    treedist <- subtree %>% cophenetic.phylo()
+          #Max distance
+      #    maxdist <- treedist %>% max()
+      #    meandist <- treedist %>% mean()
+      #}else{
+      #  maxdist <- NA
+      #  meandist <- NA
+      #}
+      #Generate row
+      row <- tibble(cluster=paste0(cluster_prefix,"c",c),size=tips_length,ref=ref,ehi=ehi,phylum=phylum,kinship=tips_kinship,hostn=tips_hostn,hosts=list(tips_host),genomes=list(tipvector),tree=list(subtree))
+      #Add to table
+      cluster_table <- bind_rows(cluster_table,row)
+    }
+    
+    #Save clusters
+    save(cluster_table,file=paste0("results/cluster_table_",cluster_prefix,".Rdata"))
 
-#Count number of clusters
-nclusters <- max(tipsplit)
-
-#Generate cluster table
-cluster_table <- tibble()
-for (c in c(1:nclusters)){
-  cat(paste0(c,"/",nclusters,"\n"))
-  tipvector <- names(tipsplit[tipsplit==c])
-  #Length
-  tips_length <- length(tipvector)
-  #Taxonomic kinship
-  tips_kinship <- taxonomy %>%
-  filter(Genome %in% tipvector) %>%
-  select(-Genome) %>%
-  summarise(across(everything(), ~ all(. == .[[1]]))) %>%
-  unlist() %>%
-  rev() %>%
-  .[which.max(. == TRUE)] %>%
-  names()
-  #Phylum
-  phylum <- taxonomy %>%
-     filter(Genome %in% tipvector) %>%
-    select(Phylum) %>%
-    slice(1) %>%
-    pull()
-  #Number of references and EHI
-  ref <- length(tipvector[tipvector %in% tips_reference])
-  ehi <- length(tipvector[tipvector %in% tips_ehi])
-  #Host taxa
-  tips_host <- ehi_metadata %>%
-    filter(Genome %in% tipvector) %>%
-    select(host_species) %>%
-    unique() %>%
-    pull()
-  #Host taxa
-  tips_hostn <- length(tips_host)
-  #Subtree and statistics
-  subtree <- keep.tip(tree_pruned,tip=tipvector)
-  #if(length(subtree$tip.label) > 1){
-  #    treedist <- subtree %>% cophenetic.phylo()
-      #Max distance
-  #    maxdist <- treedist %>% max()
-  #    meandist <- treedist %>% mean()
-  #}else{
-  #  maxdist <- NA
-  #  meandist <- NA
-  #}
-  #Generate row
-  row <- tibble(cluster=c,size=tips_length,ref=ref,ehi=ehi,phylum=phylum,kinship=tips_kinship,hostn=tips_hostn,hosts=list(tips_host),genomes=list(tipvector),tree=list(subtree))
-  #Add to table
-  cluster_table <- bind_rows(cluster_table,row)
 }
-
-#Save clusters
-save(cluster_table,file="data/cluster_table_45.Rdata")
 ```
 
+## Cluster metadata table
+Create tidy dataframes of clusters with relevant metadata
 
-Create a tidy dataframe of clusters with relevant metadata
 ```{r tidy, echo=FALSE}
 library(janitor)
-load("data/cluster_table.Rdata")
 
-reference_taxonomy <- read.table("data/reference_taxonomy.tsv", sep="\t", header=T) %>%
-  rownames_to_column(var = "Genome") %>%
-  mutate(Genome = gsub("GCA", "GB_GCA", Genome)) %>%
-  mutate(Genome = gsub("GCF", "RS_GCF", Genome)) %>%
-  clean_names()
+#Load cluster data
+load("results/cluster_table_h30.Rdata")
+clusters_h30 <- cluster_table %>%
+    unnest(., genomes) %>%
+    select(cluster, genomes) %>%
+    rename(h30=cluster)
 
-ehi_metadata <- read.table("data/ehi_metadata.csv", sep=",", header=T) %>%
-  rename(Genome = mag_name) %>%
-  mutate(Genome = gsub(".fa", "", Genome)) %>%
-  clean_names()
+load("results/cluster_table_h35.Rdata")
+clusters_h35 <- cluster_table %>%
+    unnest(., genomes) %>%
+    select(cluster, genomes) %>%
+    rename(h35=cluster)
 
-unnested <- cluster_table %>%
-  unnest(., genomes) %>%
-  select(cluster, size, ref, ehi, kinship, hostn, genomes) %>%
-  rename(cluster_size = size)
+load("results/cluster_table_h40.Rdata")
+clusters_h40 <- cluster_table %>%
+    unnest(., genomes) %>%
+    select(cluster, genomes) %>%
+    rename(h40=cluster)
+  
+load("results/cluster_table_h45.Rdata")
+clusters_h45 <- cluster_table %>%
+    unnest(., genomes) %>%
+    select(cluster, genomes) %>%
+    rename(h45=cluster)
 
-ehi_clusters <- bind_rows(ehi_metadata, reference_taxonomy) %>%
-  inner_join(., unnested, by = join_by(genome == genomes))
-
-write_tsv(ehi_clusters, "data/ehi_clusters_tidy.tsv")
-
+clusters_metadata <- bind_rows(ehi_metadata, reference_taxonomy) %>%
+      left_join(clusters_h30, by = join_by(genome == genomes)) %>%
+      left_join(clusters_h35, by = join_by(genome == genomes)) %>%
+      left_join(clusters_h40, by = join_by(genome == genomes)) %>%
+      left_join(clusters_h45, by = join_by(genome == genomes))
+      
+write_tsv(ehi_clusters, "results/clusters_metadata.tsv")
 ```
 
 
