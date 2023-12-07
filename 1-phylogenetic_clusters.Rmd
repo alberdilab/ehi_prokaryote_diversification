@@ -218,7 +218,7 @@ for (height in heights){
       filter(hostn>0) %>%
       nrow()
     divclusters <- cluster_table %>%
-      filter(size>10, hostn>10) %>%
+      filter(size>10, hostn>5) %>%
       nrow()
     meanmags <- cluster_table %>%
       filter(hostn>0) %>%

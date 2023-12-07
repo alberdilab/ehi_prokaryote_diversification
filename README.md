@@ -14,13 +14,13 @@ Diverse clusters are defined as those containing >10 MAGs.
 
 | Distance threshold | Total clusters | Diverse clusters | Mean MAGs | Max MAGs | Mean hosts | Max hosts |
 |---|---|---|---|---|---|---|
-| 0.30 | 2680 | 39 | 4.20 | 235 | 1.96 | 34 |
-| 0.35 | 2193 | 45 | 5.21 | 441 | 2.17 | 34 |
-| 0.40 | 1836 | 54 | 6.32 | 442 | 2.39 | 34 |
-| 0.45 | 1557 | 62 | 7.56 | 442 | 2.63 | 37 |
+| 0.30 | 2680 | 141 | 4.20 | 235 | 1.96 | 34 |
+| 0.35 | 2193 | 158 | 5.21 | 441 | 2.17 | 34 |
+| 0.40 | 1836 | 170 | 6.32 | 442 | 2.39 | 34 |
+| 0.45 | 1557 | 167 | 7.56 | 442 | 2.63 | 37 |
 
 - **Total clusters:** number of clusters with at least 1 EHI MAG
-- **Diverse clusters:** number of clusters with >10 MAGs and >10 hosts.
+- **Diverse clusters:** number of clusters with >10 MAGs and >5 hosts.
 - **Mean MAGs:** average number of MAGs per cluster
 - **Max MAGs:** maximum number of MAGs per cluster
 - **Mean hosts:** average number of hosts per cluster
