@@ -1,4 +1,4 @@
-Domain	Phylum	Class	Order	Family	Genus	Species
+genome	domain	phylum	class	order	family	genus	species
 GCA_001312505.1	d__Bacteria	p__Firmicutes_A	c__Clostridia	o__Lachnospirales	f__Lachnospiraceae	g__Mediterraneibacter	s__Mediterraneibacter faecis
 GCF_000024565.1	d__Bacteria	p__Fusobacteriota	c__Fusobacteriia	o__Fusobacteriales	f__Leptotrichiaceae	g__Streptobacillus	s__Streptobacillus moniliformis
 GCF_001896205.1	d__Bacteria	p__Proteobacteria	c__Gammaproteobacteria	o__Enterobacterales	f__Enterobacteriaceae	g__Edwardsiella	s__Edwardsiella piscicida

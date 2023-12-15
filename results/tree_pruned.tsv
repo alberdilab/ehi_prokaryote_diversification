@@ -1,4 +1,4 @@
-Genome	Domain	Phylum	Class	Order	Family	Genus	Species
+genome	domain	phylum	class	order	family	genus	species
 EHA00169_bin.13	d__Bacteria	p__Pseudomonadota	c__Gammaproteobacteria	o__Enterobacterales	f__Enterobacteriaceae	g__Providencia	s__Providencia rettgeri
 EHA00169_bin.14	d__Bacteria	p__Pseudomonadota	c__Gammaproteobacteria	o__Enterobacterales	f__Enterobacteriaceae	g__Morganella	s__Morganella morganii_B
 EHA00169_bin.16	d__Bacteria	p__Bacillota	c__Bacilli	o__Lactobacillales	f__Enterococcaceae	g__Enterococcus	s__

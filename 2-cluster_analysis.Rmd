@@ -13,6 +13,10 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(R.utils)
 library(ape)
+library(distillR)
+library(ggtree)
+library(ggnewscale)
+library(ggtreeExtra)
 ```
 
 ## Load data
@@ -20,15 +24,18 @@ Load GTDB tree, associated taxonomy, taxonomy of the >7000 reference genomes (1 
 
 ```{r load_data}
 #Clusters (object cluster_table)
-load("data/cluster_table_35.Rdata")
+load("results/cluster_table_h40.Rdata")
 
 #Taxonomy
-taxonomy <- read.table("data/tree_pruned.tsv", sep="\t", header=T)
+taxonomy <- read_tsv("results/tree_pruned.tsv")
 
 #EHI MAG metadata
-ehi_metadata <- read.table("data/ehi_metadata.csv", sep=",", header=T) %>%
-  rename(Genome = mag_name) %>%
-  mutate(Genome = gsub(".fa", "", Genome))
+ehi_metadata <- read_csv("data/ehi_metadata.csv") %>%
+  rename(genome = mag_name) %>%
+  mutate(genome = gsub(".fa", "", genome))
+
+#Host metadata
+host_metadata <- read_tsv("data/host_metadata.tsv")
 ```
 
 ```{r cluster_sorting}
@@ -48,14 +55,78 @@ cluster_table %>%
 ```
 
 ```{r cluster_analysis}
-clustern=1146
+clustern="h4c850"
 
 #Select cluster from the cluster table
 cluster <- cluster_table %>%
   filter(cluster == clustern)
 
+#List references (non-EHI genomes)
+references <- cluster$genomes[[1]] %>%
+  str_subset(., "GCF|GCA")
+  
 #Subset EHI metadata to the cluster MAGs
 ehi_metadata_cluster <- ehi_metadata %>%
-  filter(Genome %in% unlist(cluster$genomes))
+  filter(genome %in% unlist(cluster$genomes))
+
+#Tree (without reference)
+cluster_tree <- drop.tip(cluster$tree[[1]],tip=references)
+
+#Retrieve functional annotations
+cluster_gifts <- read_tsv(paste0("https://sid.erda.dk/share_redirect/brSNSGsFah/data/annotations/",ehi_metadata_cluster$ID,"_anno.tsv.gz")) %>%
+  rename(gene=1,genome=2) %>%
+  distill(.,GIFT_db,genomecol=2,annotcol=c(9,10,19)) %>%
+  to.elements(.,GIFT_db)
+
+host_factors <- ehi_metadata_cluster  %>%
+    left_join(host_metadata,by=join_by(host_species==host_species)) %>%
+    arrange(host_species) %>%
+    select(host_species) %>%
+    unique() %>%
+    pull()
+
+host_colors <- ehi_metadata_cluster  %>%
+    left_join(host_metadata,by=join_by(host_species==host_species)) %>%
+    select(host_species,color) %>%
+    arrange(host_species) %>%
+    unique() %>%
+    select(color) %>%
+    pull()
+
+plot_metadata1 <- ehi_metadata_cluster %>%
+    select(genome,host_species) %>%
+    column_to_rownames(var = "genome") %>%
+    mutate(host_species=factor(host_species, levels=host_factors))
+
+plot_metadata2 <- ehi_metadata_cluster %>%
+    select(genome,completeness,contamination)
+
+# Baseline tree with host identifiers
+function_tree <- ggtree(cluster_tree, size = 0.3) %>%
+    gheatmap(., data=plot_metadata1, offset=0, width=0.1, colnames=FALSE) +
+    scale_fill_manual(values=host_colors)
+
+# Add function heatmap
+function_tree <- function_tree + new_scale_fill()
+function_tree <- gheatmap(function_tree, cluster_gifts, offset=0.05, width=3.5, colnames=FALSE) +
+            vexpand(.08) +
+            coord_cartesian(clip = "off") +
+            scale_fill_gradient(low = "#f4f4f4", high = "steelblue", na.value="white")
+
+# Add completeness/contamination
+function_tree <- function_tree + new_scale_fill()
+function_tree <- function_tree +
+            geom_fruit(data=plot_metadata2,
+             geom=geom_bar,
+             grid.params=list(axis="x", text.size=2, nbreak = 1),
+             axis.params=list(vline=TRUE),
+             mapping = aes(x=completeness, y=genome),
+                 offset = 3.8,
+                 orientation="y",
+              stat="identity")
+
+
+# Plot figure
+function_tree
 
 ```

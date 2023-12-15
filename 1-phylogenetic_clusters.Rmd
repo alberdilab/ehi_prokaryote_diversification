@@ -22,30 +22,28 @@ Load GTDB tree, associated taxonomy, taxonomy of the >7000 reference genomes (1 
 
 ```{r load_data}
 #GTDB tree
-tree <- read.tree(gunzip("data/gtdbtk/gtdbtk.bac120.classify.tree.gz", remove=FALSE, overwrite=TRUE))
-
+tree <- read.tree(str_glue("data/gtdbtk/gtdbtk.bac120.classify.tree.gz"))
 #Taxonomy of reference genomes
-reference_taxonomy <- read.table("data/reference_taxonomy.tsv", sep="\t", header=T) %>%
-  rownames_to_column(var = "Genome") %>%
-  mutate(Genome = gsub("GCA", "GB_GCA", Genome)) %>%
-  mutate(Genome = gsub("GCF", "RS_GCF", Genome))
+reference_taxonomy <- read_tsv("data/reference_taxonomy.tsv") %>%
+  mutate(genome = gsub("GCA", "GB_GCA", genome)) %>%
+  mutate(genome = gsub("GCF", "RS_GCF", genome))
 
 #EHI taxonomy
-ehi_taxonomy <- read.table(gunzip("data/gtdbtk/gtdbtk.bac120.summary.tsv.gz", remove=FALSE, overwrite=TRUE), sep="\t", header=T) %>%
-  rename(Genome = user_genome)  %>%
-  separate(classification, c("Domain", "Phylum","Class","Order","Family","Genus","Species"),  sep =";") %>%
-  select(Genome,Domain,Phylum,Class,Order,Family,Genus,Species)
+ehi_taxonomy <- read_tsv("data/gtdbtk/gtdbtk.bac120.summary.tsv.gz") %>%
+  rename(genome = user_genome)  %>%
+  separate(classification, c("domain", "phylum","class","order","family","genus","species"),  sep =";") %>%
+  select(genome,domain,phylum,class,order,family,genus,species)
 
 #EHI MAG metadata
-ehi_metadata <- read.table("data/ehi_metadata.csv", sep=",", header=T) %>%
-  rename(Genome = mag_name) %>%
-  mutate(Genome = gsub(".fa", "", Genome))
+ehi_metadata <- read_csv("data/ehi_metadata.csv") %>%
+  rename(genome = mag_name) %>%
+  mutate(genome = gsub(".fa", "", genome))
 ```
 
 ## Prune phylogenetic tree
 List genome names to prune the massive GTDB phylogenetic tree.
 ```{r focal_tips, echo=FALSE}
-tips_reference <- reference_taxonomy$Genome
+tips_reference <- reference_taxonomy$genome
 
 tips_ehi <- tree$tip.label %>%
   grep("EHA", ., value = TRUE)
@@ -65,7 +63,7 @@ write.tree(tree_pruned,"results/tree_pruned.tree")
 Create an overview taxonomy table of EHI MAGs and reference genomes.
 ```{r tip_taxonomy, echo=FALSE}
 taxonomy <- rbind(ehi_taxonomy,reference_taxonomy) %>%
-  filter(Genome %in% tree_pruned$tip.label)
+  filter(genome %in% tree_pruned$tip.label)
 write.table(taxonomy,"results/tree_pruned.tsv",sep="\t",row.names=F,col.names=T,quote=F)
 ```
 
@@ -112,8 +110,8 @@ for (height in heights){
       tips_length <- length(tipvector)
       #Taxonomic kinship
       tips_kinship <- taxonomy %>%
-      filter(Genome %in% tipvector) %>%
-      select(-Genome) %>%
+      filter(genome %in% tipvector) %>%
+      select(-genome) %>%
       summarise(across(everything(), ~ all(. == .[[1]]))) %>%
       unlist() %>%
       rev() %>%
@@ -121,7 +119,7 @@ for (height in heights){
       names()
       #Phylum
       phylum <- taxonomy %>%
-         filter(Genome %in% tipvector) %>%
+         filter(genome %in% tipvector) %>%
         select(Phylum) %>%
         slice(1) %>%
         pull()
@@ -130,7 +128,7 @@ for (height in heights){
       ehi <- length(tipvector[tipvector %in% tips_ehi])
       #Host taxa
       tips_host <- ehi_metadata %>%
-        filter(Genome %in% tipvector) %>%
+        filter(genome %in% tipvector) %>%
         select(host_species) %>%
         unique() %>%
         pull()
@@ -258,9 +256,9 @@ clustergenomes <- cluster_table %>%
   unlist()
 
 taxonomy %>%
-  filter(Genome %in% clustergenomes) %>%
-  left_join(ehi_metadata, by=join_by(Genome==Genome)) %>%
-  select(Genome,Domain,Phylum,Class,Order,Family,Genus,Species,completeness,contamination,size,host_species,sample_type)
+  filter(genome %in% clustergenomes) %>%
+  left_join(ehi_metadata, by=join_by(genome==genome)) %>%
+  select(genome,domain,phylum,class,order,family,genus,species,completeness,contamination,size,host_species,sample_type)
 
 #Plot subtree with an outgroup
 plot(keep.tip(tree_pruned,tip=c(clustergenomes,"GB_GCA_001829155.1")))
