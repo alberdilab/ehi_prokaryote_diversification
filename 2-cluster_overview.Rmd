@@ -1,0 +1,55 @@
+---
+title: "2-cluster_overview.Rmd"
+author: "Antton Alberdi"
+date: "15/12/2023"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r libaries, echo=FALSE, warnings=FALSE, messages=FALSE}
+library(tidyverse)
+library(R.utils)
+library(ape)
+library(distillR)
+library(ggtree)
+library(ggnewscale)
+library(ggtreeExtra)
+```
+
+## Load data
+Load GTDB tree, associated taxonomy, taxonomy of the >7000 reference genomes (1 genome per genus) and metadata from the EHI database.
+
+```{r load_data}
+#Clusters (object cluster_table)
+load("results/cluster_table_h40.Rdata")
+
+#Taxonomy
+taxonomy <- read_tsv("results/tree_pruned.tsv")
+
+#EHI MAG metadata
+ehi_metadata <- read_csv("data/ehi_metadata.csv") %>%
+  rename(genome = mag_name) %>%
+  mutate(genome = gsub(".fa", "", genome))
+
+#Host metadata
+host_metadata <- read_tsv("data/host_metadata.tsv")
+```
+
+```{r cluster_sorting}
+#Top 100 of MAG number
+cluster_table %>%
+  arrange(desc(size)) %>%
+  print(n = 100)
+
+#Top 100 of host number
+cluster_table %>%
+  arrange(desc(hostn)) %>%
+  print(n = 100)
+
+#Number of clusters with >10 hosts and >10 MAGs
+cluster_table %>%
+  filter(size>10, hostn>10)
+```

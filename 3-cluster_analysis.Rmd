@@ -1,5 +1,5 @@
 ---
-title: "2-cluster_analysis.Rmd"
+title: "3-cluster_analysis.Rmd"
 author: "Antton Alberdi"
 date: "11/30/2023"
 output: html_document
@@ -38,21 +38,7 @@ ehi_metadata <- read_csv("data/ehi_metadata.csv") %>%
 host_metadata <- read_tsv("data/host_metadata.tsv")
 ```
 
-```{r cluster_sorting}
-#Top 100 of MAG number
-cluster_table %>%
-  arrange(desc(size)) %>%
-  print(n = 100)
-
-#Top 100 of host number
-cluster_table %>%
-  arrange(desc(hostn)) %>%
-  print(n = 100)
-
-#Number of clusters with >10 hosts and >10 MAGs
-cluster_table %>%
-  filter(size>10, hostn>10)
-```
+## Analyse a given cluster
 
 ```{r cluster_analysis}
 clustern="h4c850"
@@ -64,7 +50,7 @@ cluster <- cluster_table %>%
 #List references (non-EHI genomes)
 references <- cluster$genomes[[1]] %>%
   str_subset(., "GCF|GCA")
-  
+
 #Subset EHI metadata to the cluster MAGs
 ehi_metadata_cluster <- ehi_metadata %>%
   filter(genome %in% unlist(cluster$genomes))
