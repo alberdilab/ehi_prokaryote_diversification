@@ -20,7 +20,7 @@ library(fastcluster)
 ## Load data
 Load GTDB tree, associated taxonomy, taxonomy of the >7000 reference genomes (1 genome per genus) and metadata from the EHI database.
 
-```{r load_data}
+```{r load_data, message=FALSE}
 #GTDB tree
 tree <- read.tree(str_glue("data/gtdbtk/gtdbtk.bac120.classify.tree.gz"))
 #Taxonomy of reference genomes

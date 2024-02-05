@@ -22,7 +22,7 @@ library(ggtreeExtra)
 ## Load data
 Load GTDB tree, associated taxonomy, taxonomy of the >7000 reference genomes (1 genome per genus) and metadata from the EHI database.
 
-```{r load_data}
+```{r load_data, message=FALSE}
 #Clusters (object cluster_table)
 load("results/cluster_table_h40.Rdata")
 
@@ -34,8 +34,18 @@ ehi_metadata <- read_csv("data/ehi_metadata.csv") %>%
   rename(genome = mag_name) %>%
   mutate(genome = gsub(".fa", "", genome))
 
+#Extract hosts
+host_species_list <- cluster_table %>%
+    select(hosts) %>%
+    unlist()  %>%
+    unique()
+
 #Host metadata
-host_metadata <- read_tsv("data/host_metadata.tsv")
+host_metadata <- read_tsv("data/host_metadata.tsv") %>%
+    mutate(order=c(1:nrow(.))) %>%
+    filter(host_species %in% host_species_list)
+
+host_species <- host_metadata$host_species
 ```
 
 ```{r cluster_sorting}
@@ -46,10 +56,53 @@ cluster_table %>%
 
 #Top 100 of host number
 cluster_table %>%
-  arrange(desc(hostn)) %>%
+  arrange(-hostn) %>%
   print(n = 100)
 
 #Number of clusters with >10 hosts and >10 MAGs
 cluster_table %>%
   filter(size>10, hostn>10)
+```
+
+```{r phylum_analyses}
+#Phylum overview of MAGs
+genome_phylum_table<- ehi_metadata %>%
+  group_by(phylum) %>%
+  summarise(
+    genomen = n()
+    ) %>%
+  arrange(-genomen)
+
+genome_phylum_table %>%
+  print(n=31)
+
+#Phylum overviews of clusters
+cluster_phylum_table <- cluster_table %>%
+  filter(hostn>0)  %>%
+  group_by(phylum) %>%
+  summarise(
+    clustern = n(),
+    total_hostn = length(unique(unlist(hosts))),
+    max_hostn = max(hostn),
+    avg_hostn = mean(hostn),
+    max_genomen = max(size),
+    avg_genomen = mean(size),
+    hosts = list(unique(unlist(hosts)))
+    ) %>%
+  arrange(-clustern)
+
+cluster_phylum_table %>%
+  print(n=30)
+
+#Create binary matrix of bacterial phyla and host species
+phylum_host_matrix <- cluster_phylum_table %>%
+  unnest(hosts) %>%
+  distinct(phylum, hosts) %>%
+  mutate(value=1)  %>%
+  pivot_wider(names_from = hosts, values_from = value, values_fill = 0) %>%
+  column_to_rownames(var="phylum") %>%
+  select(all_of(host_species))
+
+#Plot heatmap
+heatmap(as.matrix(phylum_host_matrix), scale = "none", Rowv = NA, Colv = NA) 
 ```
