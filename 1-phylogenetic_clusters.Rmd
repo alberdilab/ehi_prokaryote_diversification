@@ -15,6 +15,9 @@ library(R.utils)
 library(ape)
 library(castor)
 library(fastcluster)
+library(ggsankey)
+library(viridis)
+
 ```
 
 ## Load data
@@ -120,7 +123,7 @@ for (height in heights){
       #Phylum
       phylum <- taxonomy %>%
          filter(genome %in% tipvector) %>%
-        select(Phylum) %>%
+        select(phylum) %>%
         slice(1) %>%
         pull()
       #Number of references and EHI
@@ -167,26 +170,30 @@ library(janitor)
 load("results/cluster_table_h30.Rdata")
 clusters_h30 <- cluster_table %>%
     unnest(., genomes) %>%
-    select(cluster, genomes) %>%
-    rename(h30=cluster)
+    select(cluster, genomes, kinship) %>%
+    mutate(kinship=factor(kinship, levels=c("species","genus","family","order","class",NA))) %>% 
+    rename(h30=cluster,h30_kinship=kinship)
 
 load("results/cluster_table_h35.Rdata")
 clusters_h35 <- cluster_table %>%
     unnest(., genomes) %>%
-    select(cluster, genomes) %>%
-    rename(h35=cluster)
+    select(cluster, genomes, kinship) %>%
+    mutate(kinship=factor(kinship, levels=c("species","genus","family","order","class",NA))) %>% 
+    rename(h35=cluster, h35_kinship=kinship)
 
 load("results/cluster_table_h40.Rdata")
 clusters_h40 <- cluster_table %>%
     unnest(., genomes) %>%
-    select(cluster, genomes) %>%
-    rename(h40=cluster)
+    select(cluster, genomes, kinship) %>%
+    mutate(kinship=factor(kinship, levels=c("species","genus","family","order","class",NA))) %>% 
+    rename(h40=cluster, h40_kinship=kinship)
 
 load("results/cluster_table_h45.Rdata")
 clusters_h45 <- cluster_table %>%
     unnest(., genomes) %>%
-    select(cluster, genomes) %>%
-    rename(h45=cluster)
+    select(cluster, genomes, kinship) %>%
+    mutate(kinship=factor(kinship, levels=c("species","genus","family","order","class",NA))) %>% 
+    rename(h45=cluster, h45_kinship=kinship)
 
 clusters_metadata <- bind_rows(ehi_metadata, reference_taxonomy) %>%
       left_join(clusters_h30, by = join_by(genome == genomes)) %>%
@@ -240,26 +247,605 @@ for (height in heights){
     clusterstats <- rbind(clusterstats,row)
 }
 
-clusterstats <- as.data.frame(clusterstats)
 
+clusterstats <- as.data.frame(clusterstats)
 ```
+
+
 
 ### Screen cluster
 Screen data of a specific cluster.
 
 ```{r screen_cluster, echo=FALSE}
-clustern=1257
+cutoff="45"
+clustern=1258
 
 clustergenomes <- cluster_table %>%
-  filter(cluster==clustern) %>%
+  filter(cluster==paste0("h",cutoff,"c",clustern)) %>%
   select(genomes) %>%
   unlist()
 
 taxonomy %>%
   filter(genome %in% clustergenomes) %>%
   left_join(ehi_metadata, by=join_by(genome==genome)) %>%
-  select(genome,domain,phylum,class,order,family,genus,species,completeness,contamination,size,host_species,sample_type)
+  select(genome,domain.x,phylum.x,class.x,order.x,family.x,genus.x,species.x,completeness,contamination,size,host_species,sample_type)
 
 #Plot subtree with an outgroup
 plot(keep.tip(tree_pruned,tip=c(clustergenomes,"GB_GCA_001829155.1")))
+```
+
+
+
+## Completeness in clusters
+
+```{r Completeness unweighted}
+# Completeness of all EHI MAGs
+# ehi_metadata %>% 
+#   ggplot() +
+#   geom_density(aes(completeness))
+
+# Create summary table of MAG quality parameters within each cluster for each cutoff range
+## NB: GTDB reference genomes and genomes not represented in the ehi_metadata.csv file are dropped at this point.
+cluster_qualities_summary <- clusters_metadata %>% 
+  pivot_longer(c(h30,h35,h40,h45), names_to = "cutoff_value", values_to = "cluster_name") %>% 
+  drop_na(cluster_name,completeness) %>% 
+  group_by(cutoff_value,cluster_name) %>% 
+  summarise(completeness_avg=mean(completeness),
+            completeness_minimum=min(completeness),
+            completeness_lowerquantile=quantile(completeness,0.25),
+            contamination_avg=mean(contamination),
+            contamination_max=max(contamination),
+            contamination_upperquantile=quantile(contamination,0.75),
+            cluster_size=n(),
+            phylum=phylum
+            ) %>% 
+  mutate(weight = cluster_size/sum(cluster_size))
+
+
+# slice_sample(cluster_qualities_summary,n=4)
+
+#Completeness density distribution of clusters
+#Uncommenting weight will account for amount of MAGs in each cluster
+#Uncommenting facet_wrap splits dataset to show changes in distributions within each phylum
+
+#Minimum completeness in cluster
+cluster_qualities_summary %>% 
+  ggplot() +
+  geom_density(aes(completeness_minimum, 
+                   color=cutoff_value
+                   # , weight=weight
+                   )) +
+  ggtitle("Minimum completeness in cluster") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5)) # + facet_wrap(~phylum, scales = "free") 
+
+#Average completeness in cluster
+cluster_qualities_summary %>% 
+  ggplot() +
+  geom_density(aes(completeness_avg, 
+                   color=cutoff_value
+                   # , weight=weight
+                   )) +
+  ggtitle("Average completeness in cluster") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5)) # + facet_wrap(~phylum, scales = "free")
+
+#lower quantile completeness in cluster
+cluster_qualities_summary %>% 
+  ggplot() +
+  geom_density(aes(completeness_lowerquantile, 
+                   color=cutoff_value
+                   # , weight=weight
+                   )) +
+  ggtitle("Lower quantile completeness in cluster") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5)) # + facet_wrap(~phylum, scales = "free")
+
+#Completeness density distribution of clusters
+#maximum contamination in cluster
+cluster_qualities_summary %>% 
+  ggplot() +
+  geom_density(aes(contamination_max, 
+                   color=cutoff_value
+                   # , weight=weight
+                   )) +
+  ggtitle("Maximum contamination in cluster") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5)) # + facet_wrap(~phylum, scales = "free")
+
+#Average contamination in cluster
+cluster_qualities_summary %>% 
+  ggplot() +
+  geom_density(aes(contamination_avg, 
+                   color=cutoff_value
+                   # , weight=weight
+                   )) +
+  ggtitle("Average contamination in cluster") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5)) # + facet_wrap(~phylum, scales = "free")
+
+#Upper quantile contamination in cluster
+cluster_qualities_summary %>% 
+  ggplot() +
+  geom_density(aes(contamination_upperquantile, 
+                   color=cutoff_value
+                   # , weight=weight
+                   )) +
+  ggtitle("Upper quantile contamination in cluster") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5)) # + facet_wrap(~phylum, scales = "free")
+```
+
+```{r Completeness weighted}
+# Completeness of all EHI MAGs
+ehi_metadata %>% 
+  ggplot() +
+  geom_density(aes(completeness))
+
+# Create summary table of MAG quality parameters within each cluster for each cutoff range
+## NB: GTDB reference genomes and genomes not represented in the ehi_metadata.csv file are dropped at this point.
+cluster_qualities_summary <- clusters_metadata %>% 
+  pivot_longer(c(h30,h35,h40,h45), names_to = "cutoff_value", values_to = "cluster_name") %>% 
+  drop_na(cluster_name,completeness) %>% 
+  group_by(cutoff_value,cluster_name) %>% 
+  summarise(completeness_avg=mean(completeness),
+            completeness_minimum=min(completeness),
+            completeness_lowerquantile=quantile(completeness,0.25),
+            contamination_avg=mean(contamination),
+            contamination_max=max(contamination),
+            contamination_upperquantile=quantile(contamination,0.75),
+            cluster_size=n(),
+            phylum=phylum
+            ) %>% 
+  mutate(weight = cluster_size/sum(cluster_size))
+
+
+# slice_sample(cluster_qualities_summary,n=4)
+
+#Completeness density distribution of clusters
+#Uncommenting weight will account for amount of MAGs in each cluster
+#Uncommenting facet_wrap splits dataset to show changes in distributions within each phylum
+
+#Minimum completeness in cluster
+cluster_qualities_summary %>% 
+  ggplot() +
+  geom_density(aes(completeness_minimum, 
+                   color=cutoff_value
+                   , weight=weight
+                   )) +
+  ggtitle("Minimum completeness in cluster") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5)) # + facet_wrap(~phylum, scales = "free") 
+
+#Average completeness in cluster
+cluster_qualities_summary %>% 
+  ggplot() +
+  geom_density(aes(completeness_avg, 
+                   color=cutoff_value
+                   , weight=weight
+                   )) +
+  ggtitle("Average completeness in cluster") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5)) # + facet_wrap(~phylum, scales = "free")
+
+#lower quantile completeness in cluster
+cluster_qualities_summary %>% 
+  ggplot() +
+  geom_density(aes(completeness_lowerquantile, 
+                   color=cutoff_value
+                   , weight=weight
+                   )) +
+  ggtitle("Lower quantile completeness in cluster") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5)) # + facet_wrap(~phylum, scales = "free")
+
+#Completeness density distribution of clusters
+#maximum contamination in cluster
+cluster_qualities_summary %>% 
+  ggplot() +
+  geom_density(aes(contamination_max, 
+                   color=cutoff_value
+                   , weight=weight
+                   )) +
+  ggtitle("Maximum contamination in cluster") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5)) # + facet_wrap(~phylum, scales = "free")
+
+#Average contamination in cluster
+cluster_qualities_summary %>% 
+  ggplot() +
+  geom_density(aes(contamination_avg, 
+                   color=cutoff_value
+                   , weight=weight
+                   )) +
+  ggtitle("Average contamination in cluster") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5)) # + facet_wrap(~phylum, scales = "free")
+
+#Upper quantile contamination in cluster
+cluster_qualities_summary %>% 
+  ggplot() +
+  geom_density(aes(contamination_upperquantile, 
+                   color=cutoff_value
+                   , weight=weight
+                   )) +
+  ggtitle("Upper quantile contamination in cluster") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5)) # + facet_wrap(~phylum, scales = "free")
+```
+
+## Adding completeness cutoffs
+
+```{r Adding completeness cutoffs}
+filtered_metadata <- numeric()
+clusterstats_filtered <- numeric()
+filtered_genomes <- numeric()
+
+
+for (completeness_cutoff in c(50, 70, 80, 90)) {
+     filtered_metadata <- clusters_metadata %>%
+      filter(completeness >= completeness_cutoff)
+      
+  for (clust_cutoff in c("h30", "h35", "h40", "h45")) {
+    nclusters <- filtered_metadata %>%
+      select(!!clust_cutoff) %>%
+      unique() %>%
+      nrow()
+
+    divclusters <- filtered_metadata %>%
+      group_by(!!sym(clust_cutoff)) %>%
+      summarise(
+        size = n(),
+        hostn = host_species %>% unique() %>% length()
+      ) %>%
+      filter(size > 10, hostn > 5) %>%
+      nrow()
+
+    hostn_greaterthan_one <- filtered_metadata %>%
+      group_by(!!sym(clust_cutoff)) %>%
+      summarise(hostn = host_species %>% unique() %>% length()) %>% 
+      filter(hostn>=0) 
+
+    clusters_hostn_greaterthan_one <- hostn_greaterthan_one %>% 
+      select(!!sym(clust_cutoff)) %>% 
+      pull()
+
+    meanmags <- filtered_metadata %>% 
+      filter(!!sym(clust_cutoff) %in% clusters_hostn_greaterthan_one) %>% 
+      group_by(!!sym(clust_cutoff)) %>% 
+      summarise(size=n()) %>% 
+      select(size) %>% 
+      pull() %>% 
+      mean() %>% 
+      round(2)
+    
+     maxmags <- filtered_metadata %>% 
+      filter(!!sym(clust_cutoff) %in% clusters_hostn_greaterthan_one) %>% 
+      group_by(!!sym(clust_cutoff)) %>% 
+      summarise(size=n()) %>% 
+      select(size) %>% 
+      pull() %>% 
+      max()
+
+    meanhosts <- hostn_greaterthan_one %>%
+      select(hostn) %>% 
+      pull() %>% 
+      mean() %>%
+      round(2)
+    
+    maxhosts <-  hostn_greaterthan_one %>%
+      select(hostn) %>% 
+      pull() %>% 
+      max()
+
+
+    row <- c(completeness_cutoff=completeness_cutoff,
+             clust_cutoff=clust_cutoff,
+             clusters=nclusters,
+      diverse=divclusters,
+      meanmags=meanmags,
+      maxmags=maxmags,
+      meanhosts=meanhosts,
+      maxhosts=maxhosts)
+    clusterstats_filtered <- rbind(clusterstats_filtered,row)
+  }
+
+  }
+
+cutoff_clusters <- clusterstats_filtered %>% as_tibble() %>% 
+  select(completeness_cutoff,clust_cutoff,clusters) %>% 
+  pivot_wider(names_from = completeness_cutoff, values_from = clusters) %>% 
+  mutate(across(!clust_cutoff, as.numeric))
+
+cutoff_diverse_clusters <-  clusterstats_filtered %>% as_tibble() %>% 
+  select(completeness_cutoff,clust_cutoff,diverse) %>% 
+  pivot_wider(names_from = completeness_cutoff, values_from = diverse) %>% 
+  mutate(across(!clust_cutoff, as.numeric))
+ 
+cutoff_meanmags <-  clusterstats_filtered %>% as_tibble() %>% 
+  select(completeness_cutoff,clust_cutoff,meanmags) %>% 
+  pivot_wider(names_from = completeness_cutoff, values_from = meanmags) %>% 
+  mutate(across(!clust_cutoff, as.numeric))
+
+cutoff_maxmags <-  clusterstats_filtered %>% as_tibble() %>% 
+  select(completeness_cutoff,clust_cutoff,maxmags) %>% 
+  pivot_wider(names_from = completeness_cutoff, values_from = maxmags) %>% 
+  mutate(across(!clust_cutoff, as.numeric))
+
+cutoff_meanhosts <-  clusterstats_filtered %>% as_tibble() %>% 
+  select(completeness_cutoff,clust_cutoff,meanhosts) %>% 
+  pivot_wider(names_from = completeness_cutoff, values_from = meanhosts ) %>% 
+  mutate(across(!clust_cutoff, as.numeric))
+
+cutoff_maxhosts <-  clusterstats_filtered %>% as_tibble() %>% 
+  select(completeness_cutoff,clust_cutoff,maxhosts) %>% 
+  pivot_wider(names_from = completeness_cutoff, values_from = maxhosts) %>% 
+  mutate(across(!clust_cutoff, as.numeric))
+
+
+
+cutoff_clusters
+cutoff_diverse_clusters
+cutoff_meanmags
+cutoff_maxmags
+cutoff_meanhosts
+cutoff_maxhosts
+```
+
+
+
+## GRAB cluster completeness
+Looking specifically at the clusters containing GRABs
+
+```{r GRAB completeness weighted}
+#GRABs
+#Identify GRAB clusters based on orders
+GRAB_orders <- c("o__RF32","o__RFN20","o__RF39","o__TANB77") #,"o__Saccharimonadales" #, "o_ML615J-28" 
+GRAB_families <- c() # "f__UBA1242"
+
+clusters_metadata <- clusters_metadata %>% 
+  mutate(grab=order %in% GRAB_orders|family %in% GRAB_families) %>% 
+  mutate(grab_taxon = ifelse(order %in% GRAB_orders,order,ifelse(family %in% GRAB_families,family,NA)))
+
+GRAB_clusters <- clusters_metadata %>% 
+  filter(grab==T) %>% 
+  group_by(grab_taxon) %>% 
+  summarise(h30=list(h30),
+            h35=list(h35),
+            h40=list(h40),
+            h45=list(h45))
+
+GRAB_cluster_all <- clusters_metadata %>% 
+  filter(grab==T) %>% 
+  select(h30,h35,h40,h45) %>% 
+  gather() %>% 
+  pull(value)
+
+# ## Violin plot of size
+# clusters_metadata %>%
+#   ggplot() +
+#   geom_violin(aes(x=grab, y=size))+
+#   geom_jitter(aes(x=grab, y=size), alpha=0.1,height=0)
+
+#Minimum completeness in cluster
+cluster_qualities_summary %>% 
+  ggplot() +
+  geom_density(aes(completeness_minimum, 
+                   color=cutoff_value
+                   , weight=weight
+                   )) +
+  ggtitle("Minimum completeness in cluster") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  facet_wrap(~ifelse(T==cluster_name %in% GRAB_cluster_all, "Grab", "Not grab"))
+
+#Average completeness in cluster
+cluster_qualities_summary %>% 
+  ggplot() +
+  geom_density(aes(completeness_avg, 
+                   color=cutoff_value
+                   , weight=weight
+                   )) +
+  ggtitle("Average completeness in cluster") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5))+
+  facet_wrap(~ifelse(T==cluster_name %in% GRAB_cluster_all, "Grab", "Not grab"))
+
+#lower quantile completeness in cluster
+cluster_qualities_summary %>% 
+  ggplot() +
+  geom_density(aes(completeness_lowerquantile, 
+                   color=cutoff_value
+                   , weight=weight
+                   ))+
+  ggtitle("Lower quantile completeness in cluster") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5))+
+  facet_wrap(~ifelse(T==cluster_name %in% GRAB_cluster_all, "Grab", "Not grab"))
+
+#Completeness density distribution of clusters
+#maximum contamination in cluster
+cluster_qualities_summary %>% 
+  ggplot() +
+  geom_density(aes(contamination_max, 
+                   color=cutoff_value
+                   , weight=weight
+                   ))+
+  ggtitle("Maximum contamination in cluster") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5))+
+  facet_wrap(~ifelse(T==cluster_name %in% GRAB_cluster_all, "Grab", "Not grab"))
+
+#Average contamination in cluster
+cluster_qualities_summary %>% 
+  ggplot() +
+  geom_density(aes(contamination_avg, 
+                   color=cutoff_value
+                   , weight=weight
+                   ))+
+  ggtitle("Average contamination in cluster") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5))+
+  facet_wrap(~ifelse(T==cluster_name %in% GRAB_cluster_all, "Grab", "Not grab"))
+
+#upper quantile contamination in cluster
+cluster_qualities_summary %>% 
+  ggplot() +
+  geom_density(aes(contamination_upperquantile, 
+                   color=cutoff_value
+                   , weight=weight
+                   ))+
+  ggtitle("Upper quantile contamination in cluster") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5))+
+  facet_wrap(~ifelse(T==cluster_name %in% GRAB_cluster_all, "Grab", "Not grab"))
+
+
+
+
+
+```
+
+```{r GRAB completeness unweighted}
+#GRABs
+#Identify GRAB clusters based on orders
+GRAB_orders <- c("o__RF32","o__RFN20","o__RF39","o__TANB77") #,"o__Saccharimonadales"
+
+clusters_metadata <- clusters_metadata %>% 
+  mutate(grab=order %in% GRAB_orders)
+
+GRAB_clusters <- clusters_metadata %>% 
+  filter(grab==T) %>% 
+  group_by(order) %>% 
+  summarise(h30=list(h30),
+            h35=list(h35),
+            h40=list(h40),
+            h45=list(h45))
+
+GRAB_cluster_all <- clusters_metadata %>% 
+  filter(grab==T) %>% 
+  select(h30,h35,h40,h45) %>% 
+  gather() %>% 
+  pull(value)
+
+# ## Violin plot of size
+# clusters_metadata %>%
+#   ggplot() +
+#   geom_violin(aes(x=grab, y=size))+
+#   geom_jitter(aes(x=grab, y=size), alpha=0.1,height=0)
+
+#Minimum completeness in cluster
+cluster_qualities_summary %>% 
+  ggplot() +
+  geom_density(aes(completeness_minimum, 
+                   color=cutoff_value
+                   #, weight=weight
+                   )) +
+  ggtitle("Minimum completeness in cluster") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  facet_wrap(~ifelse(T==cluster_name %in% GRAB_cluster_all, "Grab", "Not grab"))
+
+#Average completeness in cluster
+cluster_qualities_summary %>% 
+  ggplot() +
+  geom_density(aes(completeness_avg, 
+                   color=cutoff_value
+                   #, weight=weight
+                   )) +
+  ggtitle("Average completeness in cluster") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5))+
+  facet_wrap(~ifelse(T==cluster_name %in% GRAB_cluster_all, "Grab", "Not grab"))
+
+#lower quantile completeness in cluster
+cluster_qualities_summary %>% 
+  ggplot() +
+  geom_density(aes(completeness_lowerquantile, 
+                   color=cutoff_value
+                   #, weight=weight
+                   ))+
+  ggtitle("Lower quantile completeness in cluster") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5))+
+  facet_wrap(~ifelse(T==cluster_name %in% GRAB_cluster_all, "Grab", "Not grab"))
+
+#Completeness density distribution of clusters
+#maximum contamination in cluster
+cluster_qualities_summary %>% 
+  ggplot() +
+  geom_density(aes(contamination_max, 
+                   color=cutoff_value
+                   #, weight=weight
+                   ))+
+  ggtitle("Maximum contamination in cluster") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5))+
+  facet_wrap(~ifelse(T==cluster_name %in% GRAB_cluster_all, "Grab", "Not grab"))
+
+#Average contamination in cluster
+cluster_qualities_summary %>% 
+  ggplot() +
+  geom_density(aes(contamination_avg, 
+                   color=cutoff_value
+                   #, weight=weight
+                   ))+
+  ggtitle("Average contamination in cluster") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5))+
+  facet_wrap(~ifelse(T==cluster_name %in% GRAB_cluster_all, "Grab", "Not grab"))
+
+#upper quantile contamination in cluster
+cluster_qualities_summary %>% 
+  ggplot() +
+  geom_density(aes(contamination_upperquantile, 
+                   color=cutoff_value
+                   #, weight=weight
+                   ))+
+  ggtitle("Upper quantile contamination in cluster") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5))+
+  facet_wrap(~ifelse(T==cluster_name %in% GRAB_cluster_all, "Grab", "Not grab"))
+```
+
+
+
+## Kinship within clusters
+
+```{r Kinship}
+#sankey diagram of kinship
+kinship_levels = c("species","genus","family","order","class")
+
+#Bar chart of proportions of MAGs in clusters by kinship classifications
+clusters_metadata %>% 
+  select(genome,h30_kinship,h35_kinship,h40_kinship,h45_kinship,grab) %>% 
+  mutate(grab=ifelse(grab==T, "GRAB", "not GRAB")) %>% 
+  pivot_longer(-c(genome,grab), names_to = "cluster_height", values_to = "kinship") %>% 
+  ggplot() +
+  geom_bar(aes(x=cluster_height, 
+               fill=factor(kinship, levels = rev(kinship_levels))), 
+               position = "fill") +
+  labs(fill="Kinship") +
+  scale_fill_viridis_d(direction = -1) #+
+  # facet_wrap(~grab)
+
+
+clusters_metadata %>% 
+  #filter(grab==T) %>% 
+  drop_na(h30_kinship,h35_kinship,h40_kinship,h45_kinship) %>% 
+  make_long(h30_kinship,h35_kinship,h40_kinship,h45_kinship) %>% 
+  ggplot(aes(x=x,
+             next_x=next_x,
+             node=factor(node, levels=kinship_levels),
+             next_node=factor(next_node, levels=kinship_levels),
+             fill = factor(node, levels=rev(kinship_levels)))) +
+  geom_sankey(flow.alpha = 0.5, 
+              node.color = 1,
+              space = 500,
+              width=0.1,
+              linewidth = 0.05) +
+  theme_sankey(base_size = 20) +
+  scale_fill_viridis_d(direction = -1, #begin = 0, end = 0.5
+                       ) +
+  labs(fill="Kinship")
 ```
